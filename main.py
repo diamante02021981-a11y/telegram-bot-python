@@ -1,44 +1,52 @@
+import requests
+from bs4 import BeautifulSoup
 import os
-import time
-import telebot
-from dotenv import load_dotenv
-from commands import register_commands
 
-# Load environment variables
-load_dotenv()
+# Telegram bot token and chat ID from environment variables
+TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+CHAT_ID = os.getenv("CHAT_ID")
 
-# Replace 'TELEGRAM_BOT_TOKEN' with the token you received from BotFather
-TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
+# Players to watch
+PLAYERS = ["Magdalena", "устал пиздц"]
+URL = "http://unit-online.ru/online"
+
+# File to store already notified players
+SEEN_FILE = "seen.txt"
+if os.path.exists(SEEN_FILE):
+    with open(SEEN_FILE, "r", encoding="utf-8") as f:
+        seen = set(f.read().splitlines())
+else:
+    seen = set()
+
+def send_message(text):
+    try:
+        requests.get(
+            f"https://api.telegram.org/bot{TOKEN}/sendMessage",
+            params={
+                "chat_id": CHAT_ID,
+                "text": text
+            },
+            timeout=10
+        )
+    except Exception as e:
+        print("Telegram send error:", e)
+
 try:
-    bot = telebot.TeleBot(TOKEN)
-    register_commands(bot)
+    response = requests.get(URL, timeout=10)
+    soup = BeautifulSoup(response.text, "html.parser")
+    page_text = soup.get_text()
 
-    @bot.message_handler(commands=['start', 'hello'])
-    def send_welcome(message):
-        """
-        Handle '/start' and '/hello' commands.
+    new_seen = set(seen)
 
-        Args:
-            message (telebot.types.Message): The message object.
-        """
-        bot.reply_to(message, "Hello! I'm a simple Telegram bot.")
+    for player in PLAYERS:
+        if player in page_text and player not in seen:
+            send_message(f"Player online: {player}")
+            new_seen.add(player)
 
-    @bot.message_handler(func=lambda msg: True)
-    def echo_all(message):
-        """
-        Echo all incoming text messages back to the user.
-
-        Args:
-            message (telebot.types.Message): The message object.
-        """
-        bot.reply_to(message, message.text)
-
-    # Remove webhook to avoid conflicts with polling
-    bot.delete_webhook(drop_pending_updates=True)
-    bot.polling()
+    # Save updated seen list
+    with open(SEEN_FILE, "w", encoding="utf-8") as f:
+        for s in new_seen:
+            f.write(s + "\n")
 
 except Exception as e:
-    print(f"CRITICAL ERROR: Failed to initialize bot with provided token. Error: {e}")
-    print("The application will hang to prevent a restart loop. Please fix the TELEGRAM_BOT_TOKEN environment variable.")
-    while True:
-        time.sleep(3600)
+    print("Check error:", e)
