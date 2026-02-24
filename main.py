@@ -1,44 +1,38 @@
+import requests
+from bs4 import BeautifulSoup
 import os
 import time
-import telebot
-from dotenv import load_dotenv
-from commands import register_commands
 
-# Load environment variables
-load_dotenv()
+TOKEN = os.getenv("8548011715:AAHN6uG9S74hlhMjNNHpVdIjqi80rOwJGas")
+CHAT_ID = os.getenv("843757701")
 
-# Replace 'TELEGRAM_BOT_TOKEN' with the token you received from BotFather
-TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
-try:
-    bot = telebot.TeleBot(TOKEN)
-    register_commands(bot)
+PLAYERS = ["Magdalena", "устал пиздц"]
+URL = "http://unit-online.ru/online"
 
-    @bot.message_handler(commands=['start', 'hello'])
-    def send_welcome(message):
-        """
-        Handle '/start' and '/hello' commands.
+seen = set()
 
-        Args:
-            message (telebot.types.Message): The message object.
-        """
-        bot.reply_to(message, "Hello! I'm a simple Telegram bot.")
+def send_message(text):
+    requests.get(
+        f"https://api.telegram.org/bot{TOKEN}/sendMessage",
+        params={
+            "chat_id": CHAT_ID,
+            "text": text
+        }
+    )
 
-    @bot.message_handler(func=lambda msg: True)
-    def echo_all(message):
-        """
-        Echo all incoming text messages back to the user.
+while True:
+    try:
+        response = requests.get(URL, timeout=10)
+        soup = BeautifulSoup(response.text, "html.parser")
+        page_text = soup.get_text()
 
-        Args:
-            message (telebot.types.Message): The message object.
-        """
-        bot.reply_to(message, message.text)
+        for player in PLAYERS:
+            if player in page_text and player not in seen:
+                send_message(f"🔥 Игрок зашел: {player}")
+                seen.add(player)
 
-    # Remove webhook to avoid conflicts with polling
-    bot.delete_webhook(drop_pending_updates=True)
-    bot.polling()
+        time.sleep(60)
 
-except Exception as e:
-    print(f"CRITICAL ERROR: Failed to initialize bot with provided token. Error: {e}")
-    print("The application will hang to prevent a restart loop. Please fix the TELEGRAM_BOT_TOKEN environment variable.")
-    while True:
-        time.sleep(3600)
+    except Exception as e:
+        print("Ошибка:", e)
+        time.sleep(60)
